@@ -44,9 +44,22 @@ OUTPUT_SET_PATH = os.path.join(FIXTURES_DIR, "output_set_4.json")
 GUARDRAILS_CONFIG_DIR = os.path.join(ROOT_DIR, "guardrails")
 PAIR_QUESTION_IDS = (1, 5, 12, 21, 41)
 
-# --- LLM Judge ---
-GENERATION_MODEL = "gpt-4o-mini"
-JUDGE_MODEL = "gpt-4o-mini"
+# --- LLM models (env-configurable so any OpenAI-compatible provider works) ---
+# OPENAI_BASE_URL selects the endpoint (e.g. OpenAI, DeepSeek, OpenCode Go).
+OPENAI_BASE_URL = os.getenv("OPENAI_BASE_URL", "")
+# OpenCode Go requires a stable session header for routing.
+OPENAI_SESSION_ID = os.getenv("OPENAI_SESSION_ID", "lab24-day24")
+# "chat" -> POST /chat/completions; "responses" -> POST /responses (OpenAI Responses API).
+GENERATION_MODEL = os.getenv("GENERATION_MODEL", "gpt-4o-mini")
+GENERATION_API_STYLE = os.getenv("GENERATION_API_STYLE", "chat")
+JUDGE_MODEL = os.getenv("JUDGE_MODEL", "gpt-4o-mini")
+JUDGE_API_STYLE = os.getenv("JUDGE_API_STYLE", "chat")
+# NeMo Guardrails needs a chat/completions model (its provider cannot call /responses).
+GUARD_MODEL = os.getenv("GUARD_MODEL", "gpt-4o-mini")
+# RAG pipeline: enrichment + RAGAS need a chat/completions model (not Responses API).
+ENRICH_MODEL = os.getenv("ENRICH_MODEL", "deepseek-v4.1-flash")
+RAGAS_LLM_MODEL = os.getenv("RAGAS_LLM_MODEL", "deepseek-v4.1-flash")
+LLM_ENABLED = bool(OPENAI_API_KEY)
 
 # --- Guardrail latency budget ---
 LATENCY_BUDGET_P95_MS = 500  # Full guard target; Task 12 currently measures input guards only.

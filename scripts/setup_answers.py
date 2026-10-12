@@ -82,8 +82,21 @@ def build_pipeline():
     return search, reranker, RERANK_TOP_K
 
 
+def _generate(client, system: str, user: str, model: str, style: str):
+    """Call the provider via chat/completions or the OpenAI Responses API."""
+    if style == "responses":
+        resp = client.responses.create(model=model, instructions=system, input=user)
+        return resp.output_text, getattr(resp, "model", None)
+    resp = client.chat.completions.create(
+        model=model,
+        messages=[{"role": "system", "content": system},
+                  {"role": "user", "content": user}],
+    )
+    return resp.choices[0].message.content, getattr(resp, "model", None)
+
+
 def run_query(q: str, search, reranker, top_k: int, client=None) -> tuple[str, list[str], str, str | None]:
-    from config import OPENAI_API_KEY
+    from config import OPENAI_API_KEY, GENERATION_API_STYLE
 
     results = search.search(q)
     docs    = [{"text": r.text, "score": r.score, "metadata": r.metadata} for r in results]
@@ -93,19 +106,16 @@ def run_query(q: str, search, reranker, top_k: int, client=None) -> tuple[str, l
     if (OPENAI_API_KEY or client is not None) and contexts:
         try:
             if client is None:
-                from openai import OpenAI
-                client = OpenAI()
+                from src.experiment_support import make_client
+                client = make_client()
             ctx = "\n\n".join(contexts)
-            resp = client.chat.completions.create(
-                model=GENERATION_MODEL,
-                messages=[
-                    {"role": "system", "content": "Trả lời CHỈ dựa trên context. Nếu không có → nói 'Không tìm thấy.'"},
-                    {"role": "user",   "content": f"Context:\n{ctx}\n\nCâu hỏi: {q}"},
-                ],
-            )
-            reported_model = getattr(resp, "model", None)
+            content, reported_model = _generate(
+                client,
+                "Trả lời CHỈ dựa trên context. Nếu không có → nói 'Không tìm thấy.'",
+                f"Context:\n{ctx}\n\nCâu hỏi: {q}",
+                GENERATION_MODEL, GENERATION_API_STYLE)
             used_model = reported_model if isinstance(reported_model, str) and reported_model.strip() else GENERATION_MODEL
-            return resp.choices[0].message.content, contexts, "llm", used_model
+            return content, contexts, "llm", used_model
         except Exception as e:
             print(f"  ⚠️  LLM generation failed: {e}")
 
@@ -141,8 +151,8 @@ def main(argv=None):
     from config import OPENAI_API_KEY
     client = None
     if OPENAI_API_KEY:
-        from openai import OpenAI
-        client = OpenAI()
+        from src.experiment_support import make_client
+        client = make_client()
     t_start = time.time()
 
     for i, item in enumerate(test_set):
